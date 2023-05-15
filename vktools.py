@@ -41,7 +41,7 @@ class VkTools():
                                             'age_to': age_to,
                                             'sex': sex,
                                             'status': 6,
-                                            'count': 10,
+                                            'count': 20,
                                             'offset': offset
                                             })
         except ApiError:

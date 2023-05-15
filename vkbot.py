@@ -1,5 +1,6 @@
 import datetime
-from vktools import *
+import vk_api
+from vktools import tools
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.utils import get_random_id
 from db import create_db, add_users, select_viewed_id
@@ -73,9 +74,25 @@ class VkBot:
                             high_age = ages[1]
                             return low_age, high_age
 
+    def send_profile_info(self, user_id, item_from_profiles_list):
+        name = item_from_profiles_list['name']
+        profile_id = item_from_profiles_list['id']
+        photos = tools.photos_get(profile_id)
+        best_photos = photos[:3]
+        self.message_send(user_id, f'Знакомься! {name} - переходи по '
+                          f'ссылке: vk.com/id{profile_id}')
+        add_users(user_id, profile_id)
+        for photo in best_photos:
+            own_id = photo['owner_id']
+            photo_id = photo['id']
+            media = f'photo{own_id}_{photo_id}'
+            self.message_send(user_id, f'фото:', media)
+
     def handler(self):
         offset = 0
         list_of_ids = []
+        profiles_list = []
+        str_part = ','
         longpull = VkLongPoll(self.bot)
         for event in longpull.listen():
             if event.type == VkEventType.MESSAGE_NEW and event.to_me:
@@ -104,31 +121,40 @@ class VkBot:
                                                       sex, offset)
                     create_db()
                     list_of_ids = list_of_ids + select_viewed_id(event.user_id)
-                    for item in profiles_list:
-                        name = item['name']
-                        id = item['id']
-                        if id in list_of_ids:
-                            continue
-                        else:
-                            photos = tools.photos_get(id)
-                            best_photos = photos[:3]
+                    quantity = len(profiles_list)
+                    while quantity > 0:
+                        item = profiles_list.pop()
+                        quantity -= 1
+                        if str(item['id']) not in list_of_ids:
+                            self.send_profile_info(event.user_id, item)
                             self.message_send(event.user_id,
-                                              f'Знакомься! {name} - переходи по'
-                                              f'ссылке: vk.com/id{id}')
-                            add_users(event.user_id, id)
-                            for photo in best_photos:
-                                own_id = photo['owner_id']
-                                photo_id = photo['id']
-                                media = f'photo{own_id}_{photo_id}'
-                                self.message_send(event.user_id,
-                                                  f'фото:', media)
-                    self.message_send(event.user_id,
-                                      'Хотите продолжить - введите "поиск"'
-                                      'ешё раз! Чтобы завершить работу - '
-                                      'введите "стоп".')
-                    offset += 10
-                elif event.text.lower() == ('да', 'нет', '1', '2'):
-                    continue
+                                              'Хотите продолжить - введите '
+                                              '"далее". Чтобы завершить работу'
+                                              ' - введите "стоп".')
+                            break
+                    else:
+                        offset += 20
+                        self.message_send(event.user_id,
+                                          'Повторите "поиск" ещё раз!')
+                elif event.text.lower() == 'далее':
+                    quantity = len(profiles_list)
+                    while quantity > 0:
+                        item = profiles_list.pop()
+                        quantity -= 1
+                        if str(item['id']) not in list_of_ids:
+                            self.send_profile_info(event.user_id, item)
+                            self.message_send(event.user_id,
+                                              'Хотите продолжить - введите "да'
+                                              'лее". Чтобы завершить работу - '
+                                              'введите "стоп".')
+                            break
+                    else:
+                        offset += 20
+                        self.message_send(event.user_id,
+                                          'Повторите "поиск" ещё раз!')
+                elif event.text.lower() in ('да', 'нет', '1', '2')\
+                        or str_part in event.text.lower():
+                    pass
                 elif event.text.lower() == 'стоп':
                     break
                 else:
